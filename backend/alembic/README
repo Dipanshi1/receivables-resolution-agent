@@ -1,0 +1,4 @@
+Alembic database migrations for Receivables Resolution Agent.
+
+Migrations are applied against PostgreSQL using asynchronous connections managed via `app.core.config.Settings`.
+Target metadata is bound to `app.domain.base.Base.metadata`.

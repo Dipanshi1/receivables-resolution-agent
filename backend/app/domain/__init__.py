@@ -3,3 +3,7 @@
 This layer represents the core domain concepts independent of framework or database details.
 Specific domain entities and state machine definitions will be implemented in subsequent phases.
 """
+
+from .base import Base, metadata
+
+__all__ = ["Base", "metadata"]
