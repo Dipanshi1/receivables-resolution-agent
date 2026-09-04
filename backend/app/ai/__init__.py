@@ -9,6 +9,7 @@ in ``app.services`` own all of that.
 
 Phase 4A implements the Triage Agent (semantic issue classification).
 Phase 4B implements the Evidence Agent (evidence interpretation & fact extraction).
+Phase 4C implements the Resolution Agent (resolution strategy & action recommendation).
 """
 
 from __future__ import annotations
@@ -38,6 +39,27 @@ from app.ai.evidence_validation import (
     EvidenceValidationError,
     validate_evidence_output,
 )
+from app.ai.resolution_agent import (
+    ResolutionAgent,
+    ResolutionModelPort,
+    ResolutionPrompt,
+    build_resolution_prompt,
+    compute_resolution_input_hash,
+)
+from app.ai.resolution_contracts import (
+    RESOLUTION_PROMPT_VERSION,
+    ResolutionAgentResult,
+    ResolutionInput,
+    ResolutionOutcomeStatus,
+    ResolutionOutput,
+    ResolutionReasonCode,
+    ResolutionRunMetadata,
+    ResolutionStrategy,
+)
+from app.ai.resolution_validation import (
+    ResolutionValidationError,
+    validate_resolution_output,
+)
 from app.ai.triage_agent import (
     DEFAULT_MAX_ATTEMPTS,
     RawModelResponse,
@@ -63,6 +85,7 @@ from app.ai.triage_validation import TriageValidationError, validate_triage_outp
 __all__ = [
     "DEFAULT_MAX_ATTEMPTS",
     "EVIDENCE_PROMPT_VERSION",
+    "RESOLUTION_PROMPT_VERSION",
     "TRIAGE_PROMPT_VERSION",
     "ClaimAssessment",
     "CommunicationSnippet",
@@ -82,6 +105,17 @@ __all__ = [
     "ExtractedFact",
     "FactKind",
     "RawModelResponse",
+    "ResolutionAgent",
+    "ResolutionAgentResult",
+    "ResolutionInput",
+    "ResolutionModelPort",
+    "ResolutionOutcomeStatus",
+    "ResolutionOutput",
+    "ResolutionPrompt",
+    "ResolutionReasonCode",
+    "ResolutionRunMetadata",
+    "ResolutionStrategy",
+    "ResolutionValidationError",
     "TriageAgent",
     "TriageAgentResult",
     "TriageInput",
@@ -93,9 +127,12 @@ __all__ = [
     "TriageRunMetadata",
     "TriageValidationError",
     "build_evidence_prompt",
+    "build_resolution_prompt",
     "build_triage_prompt",
     "compute_evidence_input_hash",
+    "compute_resolution_input_hash",
     "compute_triage_input_hash",
     "validate_evidence_output",
+    "validate_resolution_output",
     "validate_triage_output",
 ]
