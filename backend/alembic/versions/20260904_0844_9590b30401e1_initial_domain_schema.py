@@ -18,8 +18,9 @@ Foreign keys use ON DELETE RESTRICT to preserve financial/audit history.
 """
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "9590b30401e1"
@@ -256,6 +257,14 @@ def upgrade() -> None:
         sa.Column("status", sa.String(32), nullable=False),
         sa.Column("opened_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
+        sa.CheckConstraint(
+            "claimed_amount IS NULL OR claimed_amount >= 0",
+            name="ck_disputes_claimed_amount_nonneg",
+        ),
+        sa.CheckConstraint(
+            "verified_amount IS NULL OR verified_amount >= 0",
+            name="ck_disputes_verified_amount_nonneg",
+        ),
         sa.ForeignKeyConstraint(
             ["case_id"], ["recovery_cases.id"], ondelete="RESTRICT",
             name="fk_disputes_case_id_recovery_cases",
@@ -484,6 +493,10 @@ def upgrade() -> None:
         sa.Column("reason", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
+        sa.CheckConstraint(
+            "requested_amount IS NULL OR requested_amount >= 0",
+            name="ck_human_approvals_requested_amount_nonneg",
+        ),
         sa.ForeignKeyConstraint(
             ["case_id"], ["recovery_cases.id"], ondelete="RESTRICT",
             name="fk_human_approvals_case_id_recovery_cases",
@@ -494,6 +507,8 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id", name="pk_human_approvals"),
     )
+    op.create_index("ix_human_approvals_case_id", "human_approvals", ["case_id"])
+    op.create_index("ix_human_approvals_action_id", "human_approvals", ["action_id"])
 
     # ------------------------------------------------------------------
     # audit_events — append-only operational history
@@ -532,6 +547,8 @@ def downgrade() -> None:
     op.drop_index("ix_audit_events_case_id_created_at", table_name="audit_events")
     op.drop_table("audit_events")
 
+    op.drop_index("ix_human_approvals_action_id", table_name="human_approvals")
+    op.drop_index("ix_human_approvals_case_id", table_name="human_approvals")
     op.drop_table("human_approvals")
 
     op.drop_index("ix_outreach_case_id_sent_at", table_name="outreach")

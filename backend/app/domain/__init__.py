@@ -12,6 +12,7 @@ from .enums import (
     EvidenceType,
     HumanApprovalDecision,
     InvoiceStatus,
+    IssueType,
     OutreachChannel,
     OutreachDirection,
     OutreachStatus,
@@ -20,6 +21,7 @@ from .enums import (
     RecoveryActionStatus,
     RecoveryActionType,
     RecoveryCaseStatus,
+    ResolutionProposalAction,
     ResolutionProposalStatus,
     RiskLevel,
 )
@@ -53,6 +55,7 @@ __all__ = [
     "EvidenceType",
     "HumanApprovalDecision",
     "InvoiceStatus",
+    "IssueType",
     "OutreachChannel",
     "OutreachDirection",
     "OutreachStatus",
@@ -61,6 +64,7 @@ __all__ = [
     "RecoveryActionStatus",
     "RecoveryActionType",
     "RecoveryCaseStatus",
+    "ResolutionProposalAction",
     "ResolutionProposalStatus",
     "RiskLevel",
     # Domain models

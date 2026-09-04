@@ -5,22 +5,20 @@ import sys
 from logging.config import fileConfig
 from pathlib import Path
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
+
+from alembic import context
 
 # Ensure backend directory is in sys.path
 backend_dir = Path(__file__).resolve().parent.parent
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
+import app.domain.models  # noqa: E402, F401
 from app.core.config import get_settings  # noqa: E402
 from app.domain.base import Base  # noqa: E402
-
-# Import all domain models to register them with Base.metadata before migration
-import app.domain.models  # noqa: E402, F401
-
 from app.infrastructure.database import get_async_database_url  # noqa: E402
 
 # Alembic Config object

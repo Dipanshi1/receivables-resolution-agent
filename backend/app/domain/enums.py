@@ -1,181 +1,214 @@
 """Domain enumerations used across the receivables resolution models.
 
-All enums use string values that map cleanly to VARCHAR columns in PostgreSQL.
+All enums inherit from StrEnum to provide string value compatibility
+and clean mapping to VARCHAR columns in PostgreSQL.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class InvoiceStatus(str, Enum):
+class InvoiceStatus(StrEnum):
     """Status of a customer invoice."""
 
-    OUTSTANDING = "outstanding"
-    PARTIALLY_PAID = "partially_paid"
-    PAID = "paid"
-    DISPUTED = "disputed"
-    WRITTEN_OFF = "written_off"
-    CANCELLED = "cancelled"
+    OUTSTANDING = "OUTSTANDING"
+    PARTIALLY_PAID = "PARTIALLY_PAID"
+    PAID = "PAID"
+    DISPUTED = "DISPUTED"
+    WRITTEN_OFF = "WRITTEN_OFF"
+    CANCELLED = "CANCELLED"
 
 
-class RecoveryCaseStatus(str, Enum):
-    """State machine states for a recovery case."""
+class RecoveryCaseStatus(StrEnum):
+    """State machine states for a recovery case (docs/02-engineering/state-machine.md)."""
 
-    OPENED = "opened"
-    DIAGNOSING = "diagnosing"
-    EVIDENCE_REVIEW = "evidence_review"
-    FINANCIAL_ASSESSMENT = "financial_assessment"
-    PROPOSAL_GENERATED = "proposal_generated"
-    POLICY_EVALUATED = "policy_evaluated"
-    PENDING_APPROVAL = "pending_approval"
-    EXECUTING = "executing"
-    PARTIALLY_RECOVERED = "partially_recovered"
-    RECOVERED = "recovered"
-    ESCALATED = "escalated"
-    CLOSED = "closed"
-    AUTOMATION_LOCKED = "automation_locked"
+    OVERDUE = "OVERDUE"
+    TRIAGING = "TRIAGING"
+    ISSUE_IDENTIFIED = "ISSUE_IDENTIFIED"
+    EVIDENCE_ANALYSIS = "EVIDENCE_ANALYSIS"
+    RESOLUTION_READY = "RESOLUTION_READY"
+    POLICY_REVIEW = "POLICY_REVIEW"
+    RECOVERY_INITIATED = "RECOVERY_INITIATED"
+    PAYMENT_PENDING = "PAYMENT_PENDING"
+    PARTIALLY_RECOVERED = "PARTIALLY_RECOVERED"
+    FULLY_RECOVERED = "FULLY_RECOVERED"
+    HUMAN_REVIEW = "HUMAN_REVIEW"
+    LEGAL_ESCALATION = "LEGAL_ESCALATION"
+    AUTOMATION_LOCKED = "AUTOMATION_LOCKED"
+    EXECUTION_FAILED = "EXECUTION_FAILED"
+    CLOSED = "CLOSED"
 
 
-class DisputeType(str, Enum):
+class IssueType(StrEnum):
+    """Primary issue classification for a recovery case."""
+
+    PAYMENT_FAILURE = "PAYMENT_FAILURE"
+    QUANTITY_DISPUTE = "QUANTITY_DISPUTE"
+    PRICE_DISPUTE = "PRICE_DISPUTE"
+    PO_MISMATCH = "PO_MISMATCH"
+    GST_DOCUMENTATION = "GST_DOCUMENTATION"
+    MILESTONE_PENDING = "MILESTONE_PENDING"
+    SERVICE_DELIVERY_DISPUTE = "SERVICE_DELIVERY_DISPUTE"
+    CREDIT_NOTE_REQUEST = "CREDIT_NOTE_REQUEST"
+    PROMISE_TO_PAY = "PROMISE_TO_PAY"
+    LEGAL_RISK = "LEGAL_RISK"
+    UNKNOWN = "UNKNOWN"
+
+
+class DisputeType(StrEnum):
     """Category of a commercial dispute."""
 
-    PRICE_DISCREPANCY = "price_discrepancy"
-    QUALITY_ISSUE = "quality_issue"
-    DELIVERY_ISSUE = "delivery_issue"
-    SERVICE_FAILURE = "service_failure"
-    DUPLICATE_CHARGE = "duplicate_charge"
-    INCORRECT_QUANTITY = "incorrect_quantity"
-    TAX_DISCREPANCY = "tax_discrepancy"
-    CREDIT_NOTE_PENDING = "credit_note_pending"
-    CONTRACT_DISPUTE = "contract_dispute"
-    OTHER = "other"
+    PRICE_DISCREPANCY = "PRICE_DISCREPANCY"
+    QUALITY_ISSUE = "QUALITY_ISSUE"
+    DELIVERY_ISSUE = "DELIVERY_ISSUE"
+    SERVICE_FAILURE = "SERVICE_FAILURE"
+    DUPLICATE_CHARGE = "DUPLICATE_CHARGE"
+    INCORRECT_QUANTITY = "INCORRECT_QUANTITY"
+    TAX_DISCREPANCY = "TAX_DISCREPANCY"
+    CREDIT_NOTE_PENDING = "CREDIT_NOTE_PENDING"
+    CONTRACT_DISPUTE = "CONTRACT_DISPUTE"
+    OTHER = "OTHER"
 
 
-class DisputeStatus(str, Enum):
+class DisputeStatus(StrEnum):
     """Status of a dispute record."""
 
-    OPEN = "open"
-    UNDER_REVIEW = "under_review"
-    RESOLVED = "resolved"
-    ESCALATED = "escalated"
+    OPEN = "OPEN"
+    UNDER_REVIEW = "UNDER_REVIEW"
+    RESOLVED = "RESOLVED"
+    ESCALATED = "ESCALATED"
 
 
-class EvidenceType(str, Enum):
+class EvidenceType(StrEnum):
     """Type of evidence artifact."""
 
-    INVOICE = "invoice"
-    PURCHASE_ORDER = "purchase_order"
-    DELIVERY_RECEIPT = "delivery_receipt"
-    EMAIL_COMMUNICATION = "email_communication"
-    CONTRACT = "contract"
-    CREDIT_NOTE = "credit_note"
-    PAYMENT_RECEIPT = "payment_receipt"
-    BANK_STATEMENT = "bank_statement"
-    DISPUTE_CLAIM = "dispute_claim"
-    CUSTOMER_STATEMENT = "customer_statement"
-    OTHER = "other"
+    INVOICE = "INVOICE"
+    PURCHASE_ORDER = "PURCHASE_ORDER"
+    GRN = "GRN"
+    DELIVERY_RECORD = "DELIVERY_RECORD"
+    CONTRACT = "CONTRACT"
+    MILESTONE_RECORD = "MILESTONE_RECORD"
+    CUSTOMER_EMAIL = "CUSTOMER_EMAIL"
+    PAYMENT_RECORD = "PAYMENT_RECORD"
+    CREDIT_NOTE = "CREDIT_NOTE"
+    OTHER = "OTHER"
 
 
-class AgentType(str, Enum):
+class AgentType(StrEnum):
     """Type of AI agent run."""
 
-    TRIAGE = "triage"
-    EVIDENCE = "evidence"
-    RESOLUTION = "resolution"
+    TRIAGE = "TRIAGE"
+    EVIDENCE = "EVIDENCE"
+    RESOLUTION = "RESOLUTION"
 
 
-class ResolutionProposalStatus(str, Enum):
+class ResolutionProposalStatus(StrEnum):
     """Lifecycle status of an AI resolution proposal."""
 
-    PENDING = "pending"
-    POLICY_APPROVED = "policy_approved"
-    POLICY_REJECTED = "policy_rejected"
-    HUMAN_APPROVAL_REQUIRED = "human_approval_required"
-    ACCEPTED = "accepted"
-    REJECTED = "rejected"
-    SUPERSEDED = "superseded"
+    PENDING = "PENDING"
+    POLICY_APPROVED = "POLICY_APPROVED"
+    POLICY_REJECTED = "POLICY_REJECTED"
+    HUMAN_APPROVAL_REQUIRED = "HUMAN_APPROVAL_REQUIRED"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    SUPERSEDED = "SUPERSEDED"
 
 
-class PolicyDecisionResult(str, Enum):
+class ResolutionProposalAction(StrEnum):
+    """Action recommendation produced by AI resolution agent."""
+
+    CREATE_FULL_RECOVERY = "CREATE_FULL_RECOVERY"
+    CREATE_PARTIAL_RECOVERY = "CREATE_PARTIAL_RECOVERY"
+    REQUEST_DOCUMENT = "REQUEST_DOCUMENT"
+    REQUEST_CORRECTION = "REQUEST_CORRECTION"
+    WAIT_FOR_PROMISE = "WAIT_FOR_PROMISE"
+    STOP_OUTREACH = "STOP_OUTREACH"
+    ESCALATE_HUMAN = "ESCALATE_HUMAN"
+    ESCALATE_LEGAL = "ESCALATE_LEGAL"
+
+
+class PolicyDecisionResult(StrEnum):
     """Outcome of a deterministic Policy Engine evaluation."""
 
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    HUMAN_APPROVAL_REQUIRED = "human_approval_required"
+    APPROVED = "APPROVED"
+    DEFERRED = "DEFERRED"
+    HUMAN_APPROVAL_REQUIRED = "HUMAN_APPROVAL_REQUIRED"
+    BLOCKED = "BLOCKED"
+    STOPPED = "STOPPED"
 
 
-class RecoveryActionType(str, Enum):
+class RecoveryActionType(StrEnum):
     """Type of recovery action to be executed."""
 
-    CREATE_PAYMENT_LINK = "create_payment_link"
-    CREATE_PARTIAL_RECOVERY = "create_partial_recovery"
-    APPLY_CONCESSION = "apply_concession"
-    SEND_REMINDER = "send_reminder"
-    ESCALATE_TO_HUMAN = "escalate_to_human"
-    WRITE_OFF = "write_off"
+    CREATE_PAYMENT_LINK = "CREATE_PAYMENT_LINK"
+    CREATE_PARTIAL_RECOVERY = "CREATE_PARTIAL_RECOVERY"
+    APPLY_CONCESSION = "APPLY_CONCESSION"
+    SEND_REMINDER = "SEND_REMINDER"
+    ESCALATE_TO_HUMAN = "ESCALATE_TO_HUMAN"
+    WRITE_OFF = "WRITE_OFF"
 
 
-class RecoveryActionStatus(str, Enum):
+class RecoveryActionStatus(StrEnum):
     """Lifecycle status of a recovery action."""
 
-    PENDING_APPROVAL = "pending_approval"
-    AUTHORIZED = "authorized"
-    EXECUTING = "executing"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
+    PENDING_APPROVAL = "PENDING_APPROVAL"
+    AUTHORIZED = "AUTHORIZED"
+    EXECUTING = "EXECUTING"
+    PAYMENT_PENDING = "PAYMENT_PENDING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
 
 
-class PaymentStatus(str, Enum):
+class PaymentStatus(StrEnum):
     """Status of a payment record."""
 
-    CREATED = "created"
-    PENDING = "pending"
-    CAPTURED = "captured"
-    FAILED = "failed"
-    REFUNDED = "refunded"
-    EXPIRED = "expired"
+    CREATED = "CREATED"
+    PENDING = "PENDING"
+    CAPTURED = "CAPTURED"
+    FAILED = "FAILED"
+    REFUNDED = "REFUNDED"
+    EXPIRED = "EXPIRED"
 
 
-class OutreachChannel(str, Enum):
+class OutreachChannel(StrEnum):
     """Communication channel for outreach."""
 
-    EMAIL = "email"
-    SMS = "sms"
-    WHATSAPP = "whatsapp"
-    PHONE = "phone"
-    PORTAL = "portal"
+    EMAIL = "EMAIL"
+    WHATSAPP = "WHATSAPP"
+    SMS = "SMS"
+    VOICE = "VOICE"
 
 
-class OutreachDirection(str, Enum):
+class OutreachDirection(StrEnum):
     """Direction of outreach communication."""
 
-    INBOUND = "inbound"
-    OUTBOUND = "outbound"
+    INBOUND = "INBOUND"
+    OUTBOUND = "OUTBOUND"
 
 
-class OutreachStatus(str, Enum):
+class OutreachStatus(StrEnum):
     """Delivery / processing status of an outreach record."""
 
-    SENT = "sent"
-    DELIVERED = "delivered"
-    FAILED = "failed"
-    RECEIVED = "received"
+    SENT = "SENT"
+    DELIVERED = "DELIVERED"
+    FAILED = "FAILED"
+    RECEIVED = "RECEIVED"
 
 
-class HumanApprovalDecision(str, Enum):
+class HumanApprovalDecision(StrEnum):
     """Decision on a human approval request."""
 
-    PENDING = "pending"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    EXPIRED = "expired"
-    INVALIDATED = "invalidated"
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    EXPIRED = "EXPIRED"
+    INVALIDATED = "INVALIDATED"
 
 
-class RiskLevel(str, Enum):
+class RiskLevel(StrEnum):
     """Risk classification of a recovery case."""
 
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"

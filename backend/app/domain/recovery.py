@@ -103,7 +103,7 @@ class RecoveryCase(Base):
         nullable=False,
     )
     status: Mapped[str] = mapped_column(
-        String(40), nullable=False, default=RecoveryCaseStatus.OPENED.value
+        String(40), nullable=False, default=RecoveryCaseStatus.OVERDUE.value
     )
     issue_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     risk_level: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -192,7 +192,17 @@ class Dispute(Base):
 
     __tablename__ = "disputes"
 
-    __table_args__ = (Index("ix_disputes_case_id", "case_id"),)
+    __table_args__ = (
+        CheckConstraint(
+            "claimed_amount IS NULL OR claimed_amount >= 0",
+            name="ck_disputes_claimed_amount_nonneg",
+        ),
+        CheckConstraint(
+            "verified_amount IS NULL OR verified_amount >= 0",
+            name="ck_disputes_verified_amount_nonneg",
+        ),
+        Index("ix_disputes_case_id", "case_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -611,6 +621,15 @@ class HumanApproval(Base):
     """
 
     __tablename__ = "human_approvals"
+
+    __table_args__ = (
+        CheckConstraint(
+            "requested_amount IS NULL OR requested_amount >= 0",
+            name="ck_human_approvals_requested_amount_nonneg",
+        ),
+        Index("ix_human_approvals_case_id", "case_id"),
+        Index("ix_human_approvals_action_id", "action_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

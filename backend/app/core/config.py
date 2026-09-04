@@ -1,13 +1,13 @@
 """Typed settings configuration using pydantic-settings."""
 
-from enum import Enum
+from enum import StrEnum
 from functools import lru_cache
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class AppEnvironment(str, Enum):
+class AppEnvironment(StrEnum):
     """Application deployment environment."""
 
     DEVELOPMENT = "development"
