@@ -84,6 +84,13 @@ class Settings(BaseSettings):
         description="Model name for AI reasoning",
     )
 
+    # CORS Configuration
+    cors_origins: list[str] = Field(
+        default=["http://localhost:3000", "http://127.0.0.1:3000"],
+        alias="CORS_ORIGINS",
+        description="Allowed CORS origins for web clients",
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:

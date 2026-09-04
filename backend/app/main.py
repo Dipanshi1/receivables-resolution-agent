@@ -18,6 +18,18 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if settings.app_env.value != "production" else None,
     )
 
+    # Mount CORS middleware for development
+    if settings.cors_origins:
+        from fastapi.middleware.cors import CORSMiddleware
+
+        application.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins,
+            allow_credentials=True,
+            allow_methods=["GET", "OPTIONS"],
+            allow_headers=["*"],
+        )
+
     # Mount v1 API router
     application.include_router(api_v1_router)
 
