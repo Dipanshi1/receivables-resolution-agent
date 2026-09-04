@@ -17,6 +17,10 @@ if str(backend_dir) not in sys.path:
 
 from app.core.config import get_settings  # noqa: E402
 from app.domain.base import Base  # noqa: E402
+
+# Import all domain models to register them with Base.metadata before migration
+import app.domain.models  # noqa: E402, F401
+
 from app.infrastructure.database import get_async_database_url  # noqa: E402
 
 # Alembic Config object

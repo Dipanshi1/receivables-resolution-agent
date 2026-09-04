@@ -1,9 +1,83 @@
-"""Domain layer containing pure business models, entity definitions, and domain exceptions.
+"""Domain layer — exports Base, metadata, all enums, and all domain models.
 
-This layer represents the core domain concepts independent of framework or database details.
-Specific domain entities and state machine definitions will be implemented in subsequent phases.
+Import `from app.domain import models` or individual model classes before
+accessing Base.metadata for schema generation or Alembic migrations.
 """
 
 from .base import Base, metadata
+from .enums import (
+    AgentType,
+    DisputeStatus,
+    DisputeType,
+    EvidenceType,
+    HumanApprovalDecision,
+    InvoiceStatus,
+    OutreachChannel,
+    OutreachDirection,
+    OutreachStatus,
+    PaymentStatus,
+    PolicyDecisionResult,
+    RecoveryActionStatus,
+    RecoveryActionType,
+    RecoveryCaseStatus,
+    ResolutionProposalStatus,
+    RiskLevel,
+)
+from .models import (
+    AgentRun,
+    AuditEvent,
+    Customer,
+    Dispute,
+    Evidence,
+    HumanApproval,
+    Invoice,
+    InvoiceLine,
+    Merchant,
+    MerchantPolicy,
+    Outreach,
+    Payment,
+    PolicyDecision,
+    RecoveryAction,
+    RecoveryCase,
+    ResolutionProposal,
+)
 
-__all__ = ["Base", "metadata"]
+__all__ = [
+    # Core infrastructure
+    "Base",
+    "metadata",
+    # Enums
+    "AgentType",
+    "DisputeStatus",
+    "DisputeType",
+    "EvidenceType",
+    "HumanApprovalDecision",
+    "InvoiceStatus",
+    "OutreachChannel",
+    "OutreachDirection",
+    "OutreachStatus",
+    "PaymentStatus",
+    "PolicyDecisionResult",
+    "RecoveryActionStatus",
+    "RecoveryActionType",
+    "RecoveryCaseStatus",
+    "ResolutionProposalStatus",
+    "RiskLevel",
+    # Domain models
+    "Merchant",
+    "MerchantPolicy",
+    "Customer",
+    "Invoice",
+    "InvoiceLine",
+    "RecoveryCase",
+    "Dispute",
+    "Evidence",
+    "AgentRun",
+    "ResolutionProposal",
+    "PolicyDecision",
+    "RecoveryAction",
+    "Payment",
+    "Outreach",
+    "HumanApproval",
+    "AuditEvent",
+]

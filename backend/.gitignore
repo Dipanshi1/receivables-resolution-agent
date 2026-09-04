@@ -1,0 +1,23 @@
+# Python virtual environment
+.venv/
+venv/
+env/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
+
+# Environment files (real, not .example)
+.env
+
+# pytest cache
+.pytest_cache/
+
+# Ruff cache
+.ruff_cache/
