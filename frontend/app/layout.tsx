@@ -8,16 +8,12 @@ export const metadata: Metadata = {
   description: 'AI-assisted B2B receivables resolution platform',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>
+      <body className="bg-slate-950 text-slate-200 min-h-screen">
         <Header />
-        <main className="app-main">{children}</main>
+        <main className="max-w-6xl mx-auto py-8 px-4">{children}</main>
       </body>
     </html>
   );
