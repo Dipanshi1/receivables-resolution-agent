@@ -105,6 +105,7 @@ class PolicyCheckRequest(BaseModel):
 
 class PolicyCheckResponse(BaseModel):
     policy_decision_id: UUID
+    recovery_action_id: UUID | None = None
     decision: str
     policy_version: str
     reason_code: str | None

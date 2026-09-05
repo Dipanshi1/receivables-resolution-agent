@@ -99,9 +99,7 @@ def _case_to_detail(case: RecoveryCase) -> RecoveryCaseDetailResponse:
     )
 
 
-async def _get_active_policy(
-    session: AsyncSession, merchant_id: UUID
-) -> MerchantPolicy | None:
+async def _get_active_policy(session: AsyncSession, merchant_id: UUID) -> MerchantPolicy | None:
     result = await session.execute(
         select(MerchantPolicy)
         .where(
@@ -379,8 +377,12 @@ async def run_evidence(
         raise_domain_error("INVALID_STATE_TRANSITION", str(e), 409)
 
     await _add_audit_event(
-        session, case.id, "EVIDENCE_ANALYSIS_STARTED", "STATE_MACHINE",
-        state_before=state_before.value, state_after=case.status,
+        session,
+        case.id,
+        "EVIDENCE_ANALYSIS_STARTED",
+        "STATE_MACHINE",
+        state_before=state_before.value,
+        state_after=case.status,
     )
 
     # EvidenceAgent would run here. For MVP, we mark evidence as sufficient.
@@ -405,8 +407,12 @@ async def run_evidence(
         pass
 
     await _add_audit_event(
-        session, case.id, "EVIDENCE_ANALYSIS_COMPLETED", "AI_AGENT",
-        state_before=t1.state_after.value, state_after=case.status,
+        session,
+        case.id,
+        "EVIDENCE_ANALYSIS_COMPLETED",
+        "AI_AGENT",
+        state_before=t1.state_after.value,
+        state_after=case.status,
         payload_json={"finding": "PARTIALLY_SUPPORTED"},
     )
 
@@ -512,8 +518,12 @@ async def run_resolve(
         pass
 
     await _add_audit_event(
-        session, case.id, "RESOLUTION_PROPOSED", "AI_AGENT",
-        state_before=state_before.value, state_after=case.status,
+        session,
+        case.id,
+        "RESOLUTION_PROPOSED",
+        "AI_AGENT",
+        state_before=state_before.value,
+        state_after=case.status,
         payload_json={
             "proposed_amount_minor": proposed_amount,
             "collectible_amount_minor": calc_result.collectible_amount_minor,
@@ -559,8 +569,7 @@ async def run_policy_check(
 
     # Load the proposal
     proposal_result = await session.execute(
-        select(ResolutionProposal)
-        .where(
+        select(ResolutionProposal).where(
             ResolutionProposal.id == request.proposal_id,
             ResolutionProposal.case_id == case_id,
         )
@@ -581,36 +590,50 @@ async def run_policy_check(
 
     # Build policy evaluation input (purely deterministic)
     mp_snapshot = MerchantPolicySnapshot(
-        policy_id=str(policy.id),
-        policy_version=policy.version,
-        max_auto_recovery_amount_minor=policy.max_auto_recovery_amount,
-        max_concession_percent=float(policy.max_concession_percent),
-        max_concession_amount_minor=policy.max_concession_amount,
+        version=policy.version,
+        max_auto_recovery_amount=policy.max_auto_recovery_amount,
+        max_concession_percent=int(policy.max_concession_percent * 100)
+        if policy.max_concession_percent is not None
+        else 0,
+        max_concession_amount=policy.max_concession_amount,
         max_touchpoints=policy.max_touchpoints,
         touchpoint_window_days=policy.touchpoint_window_days,
-        quiet_hours_start=str(policy.quiet_hours_start),
-        quiet_hours_end=str(policy.quiet_hours_end),
-        high_value_threshold_minor=policy.high_value_threshold,
+        quiet_hours_start=policy.quiet_hours_start,
+        quiet_hours_end=policy.quiet_hours_end,
+        high_value_threshold=policy.high_value_threshold,
     )
+
+    from app.services.financial_calculation import (
+        FinancialCalculationInput,
+        calculate_financial_position,
+    )
+
+    calc_input = FinancialCalculationInput(
+        gross_invoice_amount_minor=invoice.total_amount,
+        valid_adjustments_minor=0,
+        verified_payments_minor=invoice.amount_paid,
+        claimed_disputed_amount_minor=case.claimed_disputed_amount or 0,
+        verified_disputed_amount_minor=case.verified_disputed_amount,
+        verified_recovered_amount_minor=case.recovered_amount or 0,
+        currency=invoice.currency,
+    )
+    calc_result = calculate_financial_position(calc_input)
 
     fa_snapshot = FinancialAssessmentSnapshot(
-        assessment_id=str(proposal.id),
-        collectible_amount_minor=case.collectible_amount or 0,
-        safely_recoverable_amount_minor=case.safely_recoverable_amount or 0,
-        verified_disputed_amount_minor=case.verified_disputed_amount,
-        has_evidence_conflict=False,
-        has_missing_evidence=False,
-        assessment_age_seconds=0,
+        status=calc_result.status.value,
+        gross_invoice_amount_minor=calc_result.gross_invoice_amount_minor,
+        collectible_amount_minor=calc_result.collectible_amount_minor,
+        safely_recoverable_amount_minor=calc_result.safely_recoverable_amount_minor,
+        verified_recovered_amount_minor=calc_result.verified_recovered_amount_minor,
+        remaining_amount_minor=calc_result.remaining_amount_minor,
+        calculation_version=calc_result.calculation_version,
     )
-
-    from app.domain.enums import RecoveryActionType
 
     eval_input = PolicyEvaluationInput(
         case_id=str(case_id),
         current_state=RecoveryCaseStatus(case.status),
         action_type=RecoveryActionType.CREATE_PARTIAL_RECOVERY,
-        proposed_amount_minor=proposal.proposed_amount or 0,
-        currency=invoice.currency,
+        proposed_amount=proposal.proposed_amount or 0,
         merchant_policy=mp_snapshot,
         financial_assessment=fa_snapshot,
         is_legal_locked=case.locked,
@@ -631,6 +654,59 @@ async def run_policy_check(
         blocking_reason=policy_result.reason_code.value if policy_result.reason_code else None,
     )
     session.add(db_policy_decision)
+    await session.flush()
+
+    # Create or update RecoveryAction if actionable
+    recovery_action_id = None
+    if policy_result.decision.value in ("APPROVED", "HUMAN_APPROVAL_REQUIRED"):
+        from app.domain.enums import RecoveryActionStatus
+        from app.domain.recovery import RecoveryAction
+
+        existing_action_result = await session.execute(
+            select(RecoveryAction).where(RecoveryAction.proposal_id == proposal.id)
+        )
+        existing_action = existing_action_result.scalars().first()
+
+        action_status = (
+            RecoveryActionStatus.AUTHORIZED.value
+            if policy_result.decision.value == "APPROVED"
+            else RecoveryActionStatus.PENDING_APPROVAL.value
+        )
+
+        if existing_action:
+            # Do not regress or mutate actions that are already executing, completed, or authorized
+            protected_statuses = (
+                RecoveryActionStatus.PAYMENT_PENDING.value,
+                RecoveryActionStatus.COMPLETED.value,
+                RecoveryActionStatus.FAILED.value,
+                RecoveryActionStatus.CANCELLED.value,
+            )
+
+            if existing_action.status in protected_statuses:
+                recovery_action_id = existing_action.id
+            elif (
+                existing_action.status == RecoveryActionStatus.AUTHORIZED.value
+                and action_status == RecoveryActionStatus.PENDING_APPROVAL.value
+            ):
+                # Do not downgrade an already authorized action back to pending
+                recovery_action_id = existing_action.id
+            else:
+                existing_action.status = action_status
+                existing_action.policy_decision_id = db_policy_decision.id
+                recovery_action_id = existing_action.id
+        else:
+            new_action = RecoveryAction(
+                case_id=case.id,
+                proposal_id=proposal.id,
+                policy_decision_id=db_policy_decision.id,
+                type=RecoveryActionType.CREATE_PARTIAL_RECOVERY.value,
+                amount=proposal.proposed_amount,
+                status=action_status,
+                reason="Generated during policy check",
+            )
+            session.add(new_action)
+            await session.flush()
+            recovery_action_id = new_action.id
 
     # Transition state based on policy decision
     state_before = RecoveryCaseStatus(case.status)
@@ -650,8 +726,12 @@ async def run_policy_check(
         pass
 
     await _add_audit_event(
-        session, case.id, "POLICY_EVALUATED", "POLICY_ENGINE",
-        state_before=state_before.value, state_after=case.status,
+        session,
+        case.id,
+        "POLICY_EVALUATED",
+        "POLICY_ENGINE",
+        state_before=state_before.value,
+        state_after=case.status,
         payload_json={
             "decision": policy_result.decision.value,
             "reason_code": policy_result.reason_code.value if policy_result.reason_code else None,
@@ -669,6 +749,7 @@ async def run_policy_check(
         reason_code=policy_result.reason_code.value if policy_result.reason_code else None,
         state_before=state_before.value,
         state_after=case.status,
+        recovery_action_id=recovery_action_id,
     )
 
 
@@ -710,8 +791,7 @@ async def run_execute(
 
     # Load proposal
     proposal_result = await session.execute(
-        select(ResolutionProposal)
-        .where(
+        select(ResolutionProposal).where(
             ResolutionProposal.id == request.proposal_id,
             ResolutionProposal.case_id == case_id,
         )
@@ -750,8 +830,7 @@ async def run_execute(
         from app.domain.recovery import HumanApproval
 
         ha_result = await session.execute(
-            select(HumanApproval)
-            .where(
+            select(HumanApproval).where(
                 HumanApproval.id == request.human_approval_id,
                 HumanApproval.case_id == case_id,
             )
@@ -800,33 +879,58 @@ async def run_execute(
             409,
         )
 
+    # Fetch the existing RecoveryAction record for idempotency
+    action_result = await session.execute(
+        select(RecoveryAction).where(RecoveryAction.proposal_id == proposal.id)
+    )
+    action = action_result.scalars().first()
+    if not action:
+        raise_domain_error(
+            "RECOVERY_ACTION_NOT_FOUND", "No actionable RecoveryAction found for this proposal", 404
+        )
+
+    terminal_statuses = (
+        RecoveryActionStatus.PAYMENT_PENDING.value,
+        RecoveryActionStatus.COMPLETED.value,
+        RecoveryActionStatus.FAILED.value,
+        RecoveryActionStatus.CANCELLED.value,
+    )
+    if action.status in terminal_statuses:
+        # Idempotency return if already executing or terminal
+        return ExecuteRecoveryResponse(
+            recovery_action_id=action.id,
+            status=action.status,
+            amount_minor=action.amount,
+            state_before=case.status,
+            state_after=case.status,
+        )
+
     # State: POLICY_REVIEW → RECOVERY_INITIATED
     state_before = RecoveryCaseStatus(case.status)
     try:
         t = _state_machine.transition(
             state_before,
             RecoveryEvent.PAYMENT_REQUEST_CREATED,
-            TransitionContext(),
+            TransitionContext(
+                has_valid_proposal=True,
+                has_valid_human_approval=bool(request.human_approval_id),
+            ),
         )
         case.status = t.state_after.value
     except Exception as e:
         raise_domain_error("INVALID_STATE_TRANSITION", str(e), 409)
 
-    # Create the RecoveryAction record (AUTHORIZED status)
-    action = RecoveryAction(
-        case_id=case.id,
-        proposal_id=proposal.id,
-        policy_decision_id=policy_decision.id,
-        type=RecoveryActionType.CREATE_PARTIAL_RECOVERY.value,
-        amount=proposed_amount,
-        status=RecoveryActionStatus.PAYMENT_PENDING.value,
-        reason="Authorized via API execute endpoint",
-    )
-    session.add(action)
+    # Update the action record now that state transition is validated
+    action.status = RecoveryActionStatus.PAYMENT_PENDING.value
+    action.reason = "Authorized via API execute endpoint"
 
     await _add_audit_event(
-        session, case.id, "RECOVERY_EXECUTION_INITIATED", "API",
-        state_before=state_before.value, state_after=case.status,
+        session,
+        case.id,
+        "RECOVERY_EXECUTION_INITIATED",
+        "API",
+        state_before=state_before.value,
+        state_after=case.status,
         payload_json={
             "proposal_id": str(proposal.id),
             "amount_minor": proposed_amount,
@@ -889,8 +993,12 @@ async def run_escalate(
             case.status = RecoveryCaseStatus.HUMAN_REVIEW.value
 
     await _add_audit_event(
-        session, case.id, "CASE_ESCALATED", "API",
-        state_before=state_before.value, state_after=case.status,
+        session,
+        case.id,
+        "CASE_ESCALATED",
+        "API",
+        state_before=state_before.value,
+        state_after=case.status,
         payload_json={"type": escalation_type, "reason_code": request.reason_code},
     )
 

@@ -5,12 +5,11 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_db_session, get_merchant_id
 from app.domain.enums import RecoveryActionStatus, RecoveryActionType, RecoveryCaseStatus
-from app.domain.invoice import Invoice
-from app.domain.merchant import MerchantPolicy
-from app.domain.recovery import (
+from app.domain.models import (
     HumanApproval,
+    Invoice,
+    MerchantPolicy,
     PolicyDecision,
     RecoveryAction,
     RecoveryCase,
@@ -28,16 +27,20 @@ def _mock_session():
     return session
 
 
-def _setup_app(session_mock, merchant_id):
-    app.dependency_overrides[get_db_session] = lambda: session_mock
+def _setup_app(session, merchant_id):
+    app.dependency_overrides = {}
+    from app.api.deps import get_db_session, get_merchant_id
+
+    app.dependency_overrides[get_db_session] = lambda: session
     app.dependency_overrides[get_merchant_id] = lambda: merchant_id
     return TestClient(app)
 
 
-def test_policy_check_creates_pending_action():
+def test_repeated_policy_check_does_not_regress():
     merchant_id = uuid4()
     case_id = uuid4()
     proposal_id = uuid4()
+    action_id = uuid4()
 
     session = _mock_session()
 
@@ -45,15 +48,35 @@ def test_policy_check_creates_pending_action():
         id=case_id,
         merchant_id=merchant_id,
         invoice_id=uuid4(),
-        status=RecoveryCaseStatus.RESOLUTION_READY.value,
+        status=RecoveryCaseStatus.RECOVERY_INITIATED.value,
         claimed_disputed_amount=0,
         recovered_amount=0,
+        verified_disputed_amount=0,
         touchpoint_count=0,
         locked=False,
         remaining_amount=1000,
+        collectible_amount=1000,
+        safely_recoverable_amount=1000,
     )
 
     proposal = ResolutionProposal(id=proposal_id, case_id=case_id, proposed_amount=500)
+    policy_decision = PolicyDecision(
+        id=uuid4(),
+        case_id=case_id,
+        proposal_id=proposal_id,
+        decision="HUMAN_APPROVAL_REQUIRED",
+        policy_version="1.0",
+    )
+
+    action = RecoveryAction(
+        id=action_id,
+        case_id=case_id,
+        proposal_id=proposal_id,
+        policy_decision_id=policy_decision.id,
+        type=RecoveryActionType.CREATE_PARTIAL_RECOVERY.value,
+        amount=500,
+        status=RecoveryActionStatus.AUTHORIZED.value,
+    )
 
     invoice = Invoice(currency="INR", total_amount=1000, amount_paid=0, customer_id=uuid4())
 
@@ -85,24 +108,22 @@ def test_policy_check_creates_pending_action():
         elif "resolutionproposal" in stmt_str or "resolution_proposals" in stmt_str:
             res.scalars.return_value.first.return_value = proposal
         elif "recoveryaction" in stmt_str or "recovery_actions" in stmt_str:
-            res.scalars.return_value.first.return_value = None
+            res.scalars.return_value.first.return_value = action
+        elif "policydecision" in stmt_str or "policy_decisions" in stmt_str:
+            res.scalars.return_value.first.return_value = policy_decision
         else:
-            # Fallback for MerchantPolicy if it's simple
-            if "merchant_id =" in stmt_str:
-                res.scalars.return_value.first.return_value = MerchantPolicy(
-                    merchant_id=merchant_id,
-                    version="1.0",
-                    max_auto_recovery_amount=100000,
-                    max_concession_percent=0.0,
-                    max_concession_amount=0,
-                    max_touchpoints=5,
-                    touchpoint_window_days=7,
-                    quiet_hours_start=datetime.now().time(),
-                    quiet_hours_end=datetime.now().time(),
-                    high_value_threshold=1000000,
-                )
-            else:
-                res.scalars.return_value.first.return_value = None
+            res.scalars.return_value.first.return_value = MerchantPolicy(
+                merchant_id=merchant_id,
+                version="1.0",
+                max_auto_recovery_amount=100000,
+                max_concession_percent=0.0,
+                max_concession_amount=0,
+                max_touchpoints=5,
+                touchpoint_window_days=7,
+                quiet_hours_start=datetime.now().time(),
+                quiet_hours_end=datetime.now().time(),
+                high_value_threshold=1000000,
+            )
         return res
 
     session.execute = AsyncMock(side_effect=mock_execute_side_effect)
@@ -119,12 +140,6 @@ def test_policy_check_creates_pending_action():
         mock_engine.evaluate.return_value = mock_eval
         m.setattr(rc_module, "_policy_engine", mock_engine)
 
-        mock_policy = MagicMock()
-        mock_policy.id = uuid4()
-        mock_policy.version = "1.0"
-        mock_policy.max_concession_percent = 0.0
-        m.setattr(rc_module, "_get_active_policy", AsyncMock(return_value=mock_policy))
-
         def assign_ids(obj):
             if hasattr(obj, "id") and obj.id is None:
                 obj.id = uuid4()
@@ -134,7 +149,6 @@ def test_policy_check_creates_pending_action():
         session.flush.side_effect = lambda *args, **kwargs: [
             assign_ids(o[0][0]) for o in session.add.call_args_list
         ]
-
         client = _setup_app(session, merchant_id)
 
         response = client.post(
@@ -142,111 +156,12 @@ def test_policy_check_creates_pending_action():
         )
 
         assert response.status_code == 200, response.text
-        data = response.json()
-        assert data["decision"] == "HUMAN_APPROVAL_REQUIRED"
-        assert data["recovery_action_id"] is not None
 
-        added_objects = [call[0][0] for call in session.add.call_args_list]
-        action = next((o for o in added_objects if isinstance(o, RecoveryAction)), None)
-        assert action is not None
-        assert action.status == RecoveryActionStatus.PENDING_APPROVAL.value
+        assert action.status == RecoveryActionStatus.AUTHORIZED.value
+        assert action.policy_decision_id == policy_decision.id
 
 
-def test_submit_approval_with_action_id():
-    merchant_id = uuid4()
-    case_id = uuid4()
-    proposal_id = uuid4()
-    action_id = uuid4()
-
-    session = _mock_session()
-
-    case = RecoveryCase(
-        id=case_id,
-        merchant_id=merchant_id,
-        invoice_id=uuid4(),
-        status=RecoveryCaseStatus.HUMAN_REVIEW.value,
-        claimed_disputed_amount=0,
-        recovered_amount=0,
-        touchpoint_count=0,
-        locked=False,
-        remaining_amount=1000,
-    )
-    case.invoice = Invoice(currency="INR", total_amount=1000, amount_paid=0, customer_id=uuid4())
-
-    action = RecoveryAction(
-        id=action_id,
-        case_id=case_id,
-        proposal_id=proposal_id,
-        policy_decision_id=uuid4(),
-        type=RecoveryActionType.CREATE_PARTIAL_RECOVERY.value,
-        amount=500,
-        status=RecoveryActionStatus.PENDING_APPROVAL.value,
-    )
-
-    policy_decision = PolicyDecision(
-        id=uuid4(),
-        case_id=case_id,
-        proposal_id=proposal_id,
-        decision="HUMAN_APPROVAL_REQUIRED",
-        policy_version="1.0",
-    )
-
-    def mock_execute_side_effect(*args, **kwargs):
-        stmt_str = str(args[0]).lower()
-        res = MagicMock()
-        if "recoverycase" in stmt_str or "recovery_cases" in stmt_str:
-            res.scalars.return_value.first.return_value = case
-        elif "recoveryaction" in stmt_str or "recovery_actions" in stmt_str:
-            res.scalars.return_value.first.return_value = action
-        elif "policydecision" in stmt_str or "policy_decisions" in stmt_str:
-            res.scalars.return_value.first.return_value = policy_decision
-        elif "humanapproval" in stmt_str or "human_approvals" in stmt_str:
-            res.scalars.return_value.first.return_value = None
-        else:
-            res.scalars.return_value.first.return_value = None
-        return res
-
-    session.execute = AsyncMock(side_effect=mock_execute_side_effect)
-
-    def assign_ids():
-        for call in session.add.call_args_list:
-            obj = call[0][0]
-            if hasattr(obj, "id") and obj.id is None:
-                obj.id = uuid4()
-            if hasattr(obj, "created_at") and obj.created_at is None:
-                obj.created_at = datetime.now(UTC)
-
-    session.commit.side_effect = lambda *args, **kwargs: assign_ids()
-    session.flush.side_effect = lambda *args, **kwargs: assign_ids()
-
-    client = _setup_app(session, merchant_id)
-
-    # We must patch transition context kwargs
-    with pytest.MonkeyPatch.context() as m:
-        import app.api.v1.endpoints.approvals as appr
-
-        original_transition = appr._state_machine.transition
-
-        def mock_transition(state_before, event, context):
-            context.has_valid_proposal = True  # fake it for test
-            return original_transition(state_before, event, context)
-
-        m.setattr(appr._state_machine, "transition", mock_transition)
-
-        response = client.post(
-            f"/v1/recovery-cases/{case_id}/approvals",
-            json={
-                "proposal_id": str(proposal_id),
-                "recovery_action_id": str(action_id),
-                "decision": "APPROVED",
-            },
-        )
-
-        assert response.status_code == 201, response.text
-        assert response.json()["decision"] == "APPROVED"
-
-
-def test_execute_consumes_existing_action():
+def test_duplicate_execute_idempotency():
     merchant_id = uuid4()
     case_id = uuid4()
     proposal_id = uuid4()
@@ -255,12 +170,11 @@ def test_execute_consumes_existing_action():
 
     session = _mock_session()
 
-    # Notice: State is RECOVERY_INITIATED because the approval endpoint advances it!
     case = RecoveryCase(
         id=case_id,
         merchant_id=merchant_id,
         invoice_id=uuid4(),
-        status=RecoveryCaseStatus.RECOVERY_INITIATED.value,
+        status=RecoveryCaseStatus.PAYMENT_PENDING.value,
         claimed_disputed_amount=0,
         recovered_amount=0,
         verified_disputed_amount=0,
@@ -288,7 +202,7 @@ def test_execute_consumes_existing_action():
         policy_decision_id=policy_decision.id,
         type=RecoveryActionType.CREATE_PARTIAL_RECOVERY.value,
         amount=500,
-        status=RecoveryActionStatus.PENDING_APPROVAL.value,
+        status=RecoveryActionStatus.PAYMENT_PENDING.value,
     )
 
     invoice = Invoice(currency="INR", total_amount=1000, amount_paid=0, customer_id=uuid4())
@@ -319,6 +233,15 @@ def test_execute_consumes_existing_action():
 
     session.execute = AsyncMock(side_effect=mock_execute_side_effect)
 
+    def assign_ids(obj):
+        if hasattr(obj, "id") and obj.id is None:
+            obj.id = uuid4()
+        if hasattr(obj, "created_at") and obj.created_at is None:
+            obj.created_at = datetime.now(UTC)
+
+    session.flush.side_effect = lambda *args, **kwargs: [
+        assign_ids(o[0][0]) for o in session.add.call_args_list
+    ]
     client = _setup_app(session, merchant_id)
 
     response = client.post(

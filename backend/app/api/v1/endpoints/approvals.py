@@ -18,7 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db_session, get_merchant_id
 from app.api.errors import raise_conflict, raise_domain_error, raise_forbidden, raise_not_found
+from app.api.v1.endpoints.recovery_cases import _add_audit_event
 from app.api.v1.schemas.approval_schemas import ApprovalResponse, CreateApprovalRequest
+from app.domain.enums import RecoveryCaseStatus
 from app.domain.recovery import HumanApproval, RecoveryAction, RecoveryCase
 from app.services.human_approval import (
     ActionFingerprintInput,
@@ -26,6 +28,10 @@ from app.services.human_approval import (
     HumanApprovalService,
     compute_action_fingerprint,
 )
+from app.services.state_machine import RecoveryEvent, StateMachineService, TransitionContext
+
+_state_machine = StateMachineService()
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -49,9 +55,7 @@ async def submit_approval(
     - Approver identity comes from authenticated context (X-Merchant-ID for MVP).
     """
     # --- Merchant isolation ---
-    case_result = await session.execute(
-        select(RecoveryCase).where(RecoveryCase.id == case_id)
-    )
+    case_result = await session.execute(select(RecoveryCase).where(RecoveryCase.id == case_id))
     case = case_result.scalars().first()
     if not case or case.merchant_id != merchant_id:
         raise_forbidden()
@@ -176,6 +180,39 @@ async def submit_approval(
             session.add(db_approval)
             await session.commit()
             await session.refresh(db_approval)
+
+    # --- State Transition ---
+    state_before = RecoveryCaseStatus(case.status)
+    sm_event = (
+        RecoveryEvent.HUMAN_APPROVAL_GRANTED
+        if decision_str == "APPROVED"
+        else RecoveryEvent.REVIEW_BACK_TO_RESOLUTION
+    )
+
+    try:
+        t = _state_machine.transition(
+            state_before,
+            sm_event,
+            TransitionContext(has_valid_human_approval=(decision_str == "APPROVED")),
+        )
+        case.status = t.state_after.value
+
+        await _add_audit_event(
+            session,
+            case.id,
+            "HUMAN_APPROVAL_RECORDED",
+            "API",
+            state_before=state_before.value,
+            state_after=case.status,
+            payload_json={
+                "approval_id": str(db_approval.id),
+                "decision": decision_str,
+            },
+        )
+        await session.commit()
+    except Exception as e:
+        logger.error(f"State transition failed: {e}")
+        # We continue even if state transition fails to not block the return
 
     return ApprovalResponse(
         id=db_approval.id,
