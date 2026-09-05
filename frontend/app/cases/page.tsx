@@ -24,7 +24,16 @@ export default function CasesPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-end">
         <div>
-          <h2 className="text-2xl font-bold mb-2">Recovery Cases</h2>
+
+          <h2 className="text-2xl font-bold mb-2">
+            Recovery Cases
+            {data.data.some((c) => c.is_demo) && (
+              <span className="ml-3 inline-block bg-amber-900/50 text-amber-500 text-xs px-2 py-1 rounded border border-amber-800 align-middle">
+                DEMO DATA
+              </span>
+            )}
+          </h2>
+
           <p className="text-slate-400">All identified outstanding invoices currently managed by the agent.</p>
         </div>
         <div className="text-sm text-slate-500">

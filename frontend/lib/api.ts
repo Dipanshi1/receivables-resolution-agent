@@ -1,3 +1,4 @@
+import { DEMO_CASES, DEMO_AUDITS } from "./demoData";
 import { UUID } from 'crypto';
 
 export const MERCHANT_ID = "00000000-0000-0000-0000-000000000001";
@@ -28,6 +29,7 @@ export interface RecoveryCaseSummary {
   safely_recoverable_amount_minor: number | null;
   recovered_amount_minor: number;
   remaining_amount_minor: number;
+  is_demo?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -131,16 +133,33 @@ async function fetchApi<T>(path: string, options: RequestInit = {}): Promise<T> 
   return res.json();
 }
 
+
 export async function fetchCases(page = 1, pageSize = 50): Promise<PaginatedCasesResponse> {
-  return fetchApi<PaginatedCasesResponse>(`/v1/recovery-cases?page=${page}&page_size=${pageSize}`);
+  try {
+    return await fetchApi<PaginatedCasesResponse>(`/v1/recovery-cases?page=${page}&page_size=${pageSize}`);
+  } catch (err) {
+    console.warn("Falling back to demo cases list due to error:", err);
+    return { data: DEMO_CASES, total: DEMO_CASES.length, page: 1, page_size: 50 };
+  }
 }
 
 export async function fetchCase(caseId: string): Promise<RecoveryCaseSummary> {
-  return fetchApi<RecoveryCaseSummary>(`/v1/recovery-cases/${caseId}`);
+  try {
+    return await fetchApi<RecoveryCaseSummary>(`/v1/recovery-cases/${caseId}`);
+  } catch (err) {
+    const demoCase = DEMO_CASES.find(c => c.id === caseId);
+    if (demoCase) return { ...demoCase, is_demo: true };
+    throw err;
+  }
 }
 
 export async function fetchCaseAudit(caseId: string): Promise<PaginatedAuditResponse> {
-  return fetchApi<PaginatedAuditResponse>(`/v1/recovery-cases/${caseId}/audit`);
+  try {
+    return await fetchApi<PaginatedAuditResponse>(`/v1/recovery-cases/${caseId}/audit`);
+  } catch (err) {
+    if (DEMO_AUDITS[caseId]) return DEMO_AUDITS[caseId];
+    throw err;
+  }
 }
 
 export async function runTriage(caseId: string): Promise<TriageResponse> {

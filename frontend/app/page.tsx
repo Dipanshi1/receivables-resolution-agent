@@ -28,7 +28,16 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-bold mb-2">Merchant Recovery Dashboard</h2>
+
+        <h2 className="text-2xl font-bold mb-2">
+          Merchant Recovery Dashboard
+          {data.data.some((c) => c.is_demo) && (
+            <span className="ml-3 inline-block bg-amber-900/50 text-amber-500 text-xs px-2 py-1 rounded border border-amber-800 align-middle">
+              DEMO DATA
+            </span>
+          )}
+        </h2>
+
         <p className="text-slate-400">Overview of your active revenue recovery operations.</p>
       </div>
 
